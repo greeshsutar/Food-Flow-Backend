@@ -1,18 +1,25 @@
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcrypt");
+const crypto = require("crypto");
+
 const loginModel = require("../model/User.model");
 const transporter = require("../utilis/mail");
 const client = require("../utilis/sms");
-const razorpay = require("../utilis/razopay")
-// 🔢 OTP generator fnc
+const razorpay = require("../utilis/razorpay");
+
+// OTP generator
 function generateotp() {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
-//signup
- async function signup(req, res) {
+//
+//  SIGNUP
+//
+async function signup(req, res) {
   try {
-    let { firstname, lastname, gmail, mobileno, password } = req.body;
+    const { firstname, lastname, gmail, mobileno, password } = req.body;
+
+    console.log("BODY:", req.body); // 🔍 DEBUG
 
     if (!firstname || !lastname || !password) {
       return res.status(400).send({ message: "Required fields missing" });
@@ -30,279 +37,339 @@ function generateotp() {
       return res.status(400).send({ message: "Weak password" });
     }
 
-    let query = [];
-    if (gmail) query.push({ gmail });
-    if (mobileno) query.push({ mobileno });
+    const existingUser = await loginModel.findOne({
+      $or: [{ gmail }, { mobileno }],
+    });
 
-    let existingUser = await loginModel.findOne({ $or: query });
-
+    // 🔥 HANDLE EXISTING USER
     if (existingUser) {
+      if (!existingUser.isVerified) {
+        const otp = generateotp();
+
+        existingUser.otp = await bcrypt.hash(otp, 10);
+        existingUser.otpExpires = Date.now() + 5 * 60 * 1000;
+
+        await existingUser.save();
+
+        // ✅ SEND OTP BASED ON DATA (NOT METHOD)
+        if (existingUser.gmail && existingUser.gmail.trim() !== "") {
+          await transporter.sendMail({
+            to: existingUser.gmail,
+            subject: "OTP Verification",
+            text: `Your OTP is ${otp}`,
+          });
+        } else if (existingUser.mobileno && existingUser.mobileno.trim() !== "") {
+          await client.messages.create({
+            body: `Your OTP is ${otp}`,
+            from: process.env.TWILIO_PHONE,
+            to: "+91" + existingUser.mobileno,
+          });
+        }
+
+        return res.send({
+          message: "User exists but not verified. OTP resent.",
+          requireOtp: true,
+        });
+      }
+
       return res.status(400).send({ message: "User already exists" });
     }
 
-    let hashedPassword = await bcrypt.hash(password, 10);
+    // 🔥 NEW USER
+    const otp = generateotp();
 
-    let userData = {
+    await loginModel.create({
       firstname,
       lastname,
-      password: hashedPassword
-    };
+      gmail: gmail || undefined,        // ✅ FIX
+      mobileno: mobileno || undefined,  // ✅ FIX
+      password: await bcrypt.hash(password, 10),
+      otp: await bcrypt.hash(otp, 10),
+      otpExpires: Date.now() + 5 * 60 * 1000,
+      isVerified: false,
+    });
 
-    if (gmail) userData.gmail = gmail;
-    if (mobileno) userData.mobileno = mobileno;
+    // ✅ SEND OTP (STRICT CHECK)
+    if (gmail && gmail.trim() !== "") {
+      await transporter.sendMail({
+        to: gmail,
+        subject: "OTP Verification",
+        text: `Your OTP is ${otp}`,
+      });
+    } else if (mobileno && mobileno.trim() !== "") {
+      await client.messages.create({
+        body: `Your OTP is ${otp}`,
+        from: process.env.TWILIO_PHONE,
+        to: "+91" + mobileno,
+      });
+    } else {
+      return res.status(400).send({ message: "No valid contact provided" });
+    }
 
-    await loginModel.create(userData);
-
-    res.status(201).send({ message: "Signup successful" }); //  no user return
+    return res.send({
+      message: `OTP sent to ${gmail ? "email" : "mobile"}`, // ✅ FIXED MESSAGE
+      requireOtp: true,
+    });
 
   } catch (err) {
     console.error(err);
-    res.status(500).send({ message: "Signup error" });
+    return res.status(500).send({ message: "Signup error" });
   }
 }
-//login
+
+//
+// 🔥 OTP VERIFY
+//
+async function signupotp(req, res) {
+  try {
+    const { gmail, mobileno, otp } = req.body;
+
+    if (!otp) {
+      return res.status(400).send({ message: "OTP REQUIRED" });
+    }
+
+    const user = gmail
+      ? await loginModel.findOne({ gmail })
+      : await loginModel.findOne({ mobileno });
+
+    if (!user) return res.status(400).send({ message: "User not found" });
+
+    if (!user.otp) return res.status(400).send({ message: "No OTP found" });
+
+    if (user.otpExpires < Date.now()) {
+      return res.status(400).send({ message: "OTP expired" });
+    }
+
+    const isMatch = await bcrypt.compare(otp, user.otp);
+
+    if (!isMatch) {
+      return res.status(400).send({ message: "Wrong OTP" });
+    }
+
+    user.isVerified = true;
+    user.otp = null;
+    user.otpExpires = null;
+
+    await user.save();
+
+    return res.send({ message: "OTP Verified Successfully" });
+
+  } catch (err) {
+    console.error(err);
+    return res.status(500).send({ message: "Server Error" });
+  }
+}
+
+
+//
+//  LOGIN (FIXED FLOW)
+//
 async function login(req, res) {
   try {
-    let { gmail, mobileno, password } = req.body;
+    const { gmail, mobileno, password } = req.body;
 
     if ((!gmail && !mobileno) || !password) {
       return res.status(400).send({ message: "Missing credentials" });
     }
 
-    let query = [];
-    if (gmail) query.push({ gmail });
-    if (mobileno) query.push({ mobileno });
+    const user = await loginModel.findOne({
+      $or: [{ gmail }, { mobileno }],
+    });
 
-    let user = await loginModel.findOne({ $or: query });
+    if (!user) return res.status(400).send({ message: "User not found" });
 
-    if (!user) {
-      return res.status(400).send({ message: "User not found" });
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) return res.status(400).send({ message: "Invalid password" });
+
+    // 🔥 NOT VERIFIED → SEND OTP
+    if (!user.isVerified) {
+      const otp = generateotp();
+
+      user.otp = await bcrypt.hash(otp, 10);
+      user.otpExpires = Date.now() + 5 * 60 * 1000;
+
+      await user.save();
+
+      if (user.gmail && user.gmail.trim() !== "") {
+        await transporter.sendMail({
+          to: user.gmail,
+          subject: "OTP Verification",
+          text: `Your OTP is ${otp}`,
+        });
+      } else if (user.mobileno && user.mobileno.trim() !== "") {
+        await client.messages.create({
+          body: `Your OTP is ${otp}`,
+          from: process.env.TWILIO_PHONE,
+          to: "+91" + user.mobileno,
+        });
+      }
+
+      return res.status(403).send({
+        message: "Account not verified. OTP sent.",
+        requireOtp: true,
+      });
     }
 
-    let isMatch = await bcrypt.compare(password, user.password);
-
-    if (!isMatch) {
-      return res.status(400).send({ message: "Invalid password" });
-    }
-
-    let token = jwt.sign(
-      { id: user._id , name: user.firstname}, // only id
+    const token = jwt.sign(
+      { id: user._id, name: user.firstname },
       process.env.JWT_SECRET,
       { expiresIn: "1h" }
     );
 
-    res.send({ message: "Login successful", token });
+    return res.send({ message: "Login successful", token });
 
   } catch (err) {
     console.error(err);
-    res.status(500).send({ message: "Login error" });
+    return res.status(500).send({ message: "Login error" });
   }
 }
-//forgot password
+
+//
+// 🔥 FORGOT PASSWORD
+//
 async function forgotPassword(req, res) {
   try {
-    let { gmail, mobileno } = req.body;
+    const { gmail, mobileno } = req.body;
 
-    if (!gmail && !mobileno) {
-      return res.status(400).send({ message: "Email or Mobile required" });
-    }
-
-    let query = [];
-    if (gmail) query.push({ gmail });
-    if (mobileno) query.push({ mobileno });
-
-    let user = await loginModel.findOne({ $or: query });
+    const user = gmail
+      ? await loginModel.findOne({ gmail })
+      : await loginModel.findOne({ mobileno });
 
     if (!user) {
       return res.status(404).send({ message: "User not found" });
     }
 
-    // Prevent OTP spam
-    if (user.otpExpires && user.otpExpires > Date.now()) {
-      return res.status(429).send({ message: "OTP already sent. Try later." });
-    }
-
-    let otp = generateotp();
-    let hashedOtp = await bcrypt.hash(otp, 10);
-
-    user.otp = hashedOtp;
+    const otp = generateotp();
+    user.otp = await bcrypt.hash(otp, 10);
     user.otpExpires = Date.now() + 5 * 60 * 1000;
 
     await user.save();
 
     if (gmail) {
       await transporter.sendMail({
-        from: process.env.EMAIL_USER,
         to: gmail,
-        subject: "OTP",
-        text: `Your OTP is ${otp}`
+        subject: "Reset OTP",
+        text: `Your OTP is ${otp}`,
       });
-    }
-
-    if (mobileno) {
+    } else {
       await client.messages.create({
         body: `Your OTP is ${otp}`,
         from: process.env.TWILIO_PHONE,
-        to:  "+91" + mobileno 
+        to: "+91" + mobileno,
       });
     }
 
-    res.send({ message: "OTP sent successfully" });
+    return res.send({ message: "OTP sent" });
 
-  } catch (err) {
-    console.error(err);
-    res.status(500).send({ message: "OTP error" });
+  } catch {
+    return res.status(500).send({ message: "Error" });
   }
 }
-// verify otp 
+
+//
+// 🔥 RESET PASSWORD
+//
 async function resetPassword(req, res) {
   try {
-    let { gmail, mobileno, otp, newPassword } = req.body;
+    const { gmail, mobileno, otp, newPassword } = req.body;
 
-    if ((!gmail && !mobileno) || !otp || !newPassword) {
-      return res.status(400).send({ message: "Incomplete data" });
-    }
+    const user = gmail
+      ? await loginModel.findOne({ gmail })
+      : await loginModel.findOne({ mobileno });
 
-    if (newPassword.length < 6) {
-      return res.status(400).send({ message: "Weak password" });
-    }
+    if (!user) return res.status(404).send({ message: "User not found" });
 
-    let query = [];
-    if (gmail) query.push({ gmail });
-    if (mobileno) query.push({ mobileno });
+    const isMatch = await bcrypt.compare(otp, user.otp);
 
-    let user = await loginModel.findOne({ $or: query });
+    if (!isMatch) return res.status(400).send({ message: "Invalid OTP" });
 
-    if (!user) {
-      return res.status(404).send({ message: "User not found" });
-    }
-
-    if (!user.otp) {
-      return res.status(400).send({ message: "No OTP requested" });
-    }
-
-    if (user.otpExpires < Date.now()) {
-      return res.status(400).send({ message: "OTP expired" });
-    }
-
-    let isMatch = await bcrypt.compare(otp, user.otp);
-
-    if (!isMatch) {
-      return res.status(400).send({ message: "Invalid OTP" });
-    }
-
-    let hashedPassword = await bcrypt.hash(newPassword, 10);
-
-    user.password = hashedPassword;
+    user.password = await bcrypt.hash(newPassword, 10);
     user.otp = null;
     user.otpExpires = null;
 
     await user.save();
 
-    res.send({ message: "Password reset successful" });
+    return res.send({ message: "Password reset successful" });
 
-  } catch (err) {
-    console.error(err);
-    res.status(500).send({ message: "Reset error" });
-  }
-}
-async function getProfile(req, res) {
-  try {
-    const user = await loginModel.findById(req.user.id).select("-password -otp");
-
-    if (!user) {
-      return res.status(404).send({ message: "User not found" });
-    }
-
-    res.send(user);
-
-  } catch (err) {
-    console.error(err);
-    res.status(500).send({ message: "Profile error" });
+  } catch {
+    return res.status(500).send({ message: "Error" });
   }
 }
 
-async function getProfile(req, res) {
-  try {
-    const user = await loginModel.findById(req.user.id).select("-password -otp");
-
-    if (!user) {
-      return res.status(404).send({ message: "User not found" });
-    }
-
-    res.send(user);
-
-  } catch (err) {
-    console.error(err);
-    res.status(500).send({ message: "Profile error" });
-  }
-}
-
-//Payment Razorpay 
-
+//
+// 🔥 PAYMENT
+//
 async function payment(req, res) {
   try {
-    const { total, items, paymentMethod } = req.body;
+    const { totalamount, paymentMethod } = req.body;
 
-    // validation
-    if (!total || !items) {
-      return res.status(400).send({ message: "Enter the details" });
-    }
-
-    if (!paymentMethod) {
-      return res.status(400).send({ message: "Select payment method" });
-    }
-
-    // COD
     if (paymentMethod === "cod") {
-      return res.status(200).send({
-        message: "Cash on Delivery order placed"
-      });
+      return res.send({ message: "Order placed (COD)" });
     }
 
-    // ONLINE (Razorpay)
-    if (paymentMethod === "online") {
-      const options = {
-        amount: total*100, // paise
-        currency: "INR",
-      };
+    const order = await razorpay.orders.create({
+      amount: totalamount * 100,
+      currency: "INR",
+    });
 
-      const order = await razorpay.orders.create(options);
+    return res.send({ order });
 
-      return res.json({
-        message: "Order created",
-        order
-      });
+  } catch {
+    return res.status(500).send({ message: "Payment error" });
+  }
+}
+
+//
+// 🔥 PROFILE
+//
+async function getProfile(req, res) {
+  try {
+    const user = await loginModel
+      .findById(req.user.id)
+      .select("-password -otp");
+
+    return res.send(user);
+
+  } catch {
+    return res.status(500).send({ message: "Profile error" });
+  }
+}
+async function verifyPayment(req, res) {
+  try {
+    const {
+      razorpay_order_id,
+      razorpay_payment_id,
+      razorpay_signature,
+    } = req.body;
+
+    const body = razorpay_order_id + "|" + razorpay_payment_id;
+
+    const expectedSignature = crypto
+      .createHmac("sha256", process.env.KEY_SECRET)
+      .update(body.toString())
+      .digest("hex");
+
+    if (expectedSignature === razorpay_signature) {
+      return res.send({ success: true, message: "Payment verified" });
+    } else {
+      return res.status(400).send({ success: false, message: "Invalid signature" });
     }
 
   } catch (err) {
     console.error(err);
-    res.status(500).send({ message: "Payment error" });
+    return res.status(500).send({ message: "Verification error" });
   }
 }
-
-
-/// User Contact Information 
-async function contact(req, res) {
-  let { name, email, message } = req.body;
-
-  if (!name || !email || !message) {
-    return res.status(400).send({ message: "All fields are required" });
-  }
-
-  try {
-    await contactModel.create({ name, email, message }); //  use correct model
-    res.status(200).send({ message: "Successfully Submitted" });
-  } catch (err) {
-    res.status(500).send({ message: "Server error. Try again." });
-  }
-}
+//
+// EXPORT
+//
 module.exports = {
   signup,
+  signupotp,
   login,
   forgotPassword,
   resetPassword,
   getProfile,
-  payment
+  payment,
+  verifyPayment
 };
-

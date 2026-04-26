@@ -4,7 +4,9 @@ const {
   forgotPassword, 
   resetPassword, 
   getProfile,
-  payment   // ✅ ADD THIS
+  payment,
+  signupotp,
+  verifyPayment
 } = require("../controller/login.controller");
 
 const {
@@ -26,6 +28,7 @@ function restaurentRoute(app) {
 
   // AUTH
   app.post("/user/signup", signup);
+  app.post("/user/signup-otp", signupotp);
   app.post("/user/login", login);
   app.post("/user/forgot-password", forgotPassword);
   app.post("/user/reset-password", resetPassword);
@@ -33,8 +36,9 @@ function restaurentRoute(app) {
   // PROFILE
   app.get("/user/profile", authMiddleware, getProfile);
 
-  // PAYMENT (VERY IMPORTANT)
+  // PAYMENT
   app.post("/user/checkout", authMiddleware, payment);
+  app.post("/user/verify-payment", verifyPayment);
 
   // RESTAURANT
   app.get("/api/restaurent", fetchingRestaurent);
