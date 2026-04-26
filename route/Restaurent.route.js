@@ -51,12 +51,16 @@ function restaurentRoute(app) {
   app.post("/api/cart/add", authMiddleware, addToCart);
   app.get("/api/cart", authMiddleware, getCart);
   app.delete("/api/cart/:itemId", authMiddleware, removeFromCart);
-}
 
 
+
+  
 // getting restaturent detail from backend so that restaturent data will be visible to everyone not  only for cors exteension instaler
 // SWIGGY PROXY
 app.get("/api/restaurants", getRestaurants);
 app.get("/api/menu/:id", getMenu);
+}
+
+
 
 module.exports = restaurentRoute;
