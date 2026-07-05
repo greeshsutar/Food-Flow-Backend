@@ -25,4 +25,4 @@ async function getMenu(req, res) {
   }
 }
 
-module.exports = { getRestaurants, getMenu };
+module.exports = { getRestaurants, getMenu }; 

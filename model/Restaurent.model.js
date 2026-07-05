@@ -1,21 +1,53 @@
 const mongoose = require("mongoose");
 
-const { Schema } = mongoose;
+const orderSchema = new mongoose.Schema(
+  {
+    // Who placed the order
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true
+    },
 
-const RestaurentSchema = new Schema({
-  name: String,
-  imageurl: String,
-  avgRating: Number,
-  deliveryTime: String,
-  cuisines: String,
-});
+    // What was ordered
+    items: [
+      {
+        name: { type: String, required: true },
+        price: { type: Number, required: true },
+        imageId: { type: String },
+        avgRating: { type: Number, default: 0 }
+      }
+    ],
 
-RestaurentSchema.index({ name: 1 });
-RestaurentSchema.index({ cuisines: "text" });
+    // Bill
+    totalAmount: {
+      type: Number,
+      required: true
+    },
 
-const Restaurentdetail = mongoose.model(
-  "Restaurentdetail",
-  RestaurentSchema
+    // COD or ONLINE
+    paymentMethod: {
+      type: String,
+      enum: ["cod", "online"],
+      required: true
+    },
+
+    // pending = not paid yet, paid = payment done
+    paymentStatus: {
+      type: String,
+      enum: ["pending", "paid"],
+      default: "pending"
+    },
+
+    // Only for online payment — Razorpay order ID
+    razorpayOrderId: {
+      type: String,
+      default: null
+    }
+  },
+  
+  // ✅ This automatically adds createdAt and updatedAt
+  { timestamps: true }
 );
 
-module.exports = {Restaurentdetail};
+module.exports = mongoose.model("Order", orderSchema);

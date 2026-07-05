@@ -41,7 +41,7 @@ async function signup(req, res) {
       $or: [{ gmail }, { mobileno }],
     });
 
-    // 🔥 HANDLE EXISTING USER
+    // HANDLE EXISTING USER
     if (existingUser) {
       if (!existingUser.isVerified) {
         const otp = generateotp();
@@ -51,7 +51,7 @@ async function signup(req, res) {
 
         await existingUser.save();
 
-        // ✅ SEND OTP BASED ON DATA (NOT METHOD)
+        //  SEND OTP BASED ON DATA (NOT METHOD)
         if (existingUser.gmail && existingUser.gmail.trim() !== "") {
           await transporter.sendMail({
             to: existingUser.gmail,
@@ -75,7 +75,7 @@ async function signup(req, res) {
       return res.status(400).send({ message: "User already exists" });
     }
 
-    // 🔥 NEW USER
+    //  NEW USER
     const otp = generateotp();
 
     await loginModel.create({
@@ -225,7 +225,7 @@ async function login(req, res) {
 }
 
 //
-// 🔥 FORGOT PASSWORD
+//  FORGOT PASSWORD
 //
 async function forgotPassword(req, res) {
   try {
@@ -320,7 +320,7 @@ async function payment(req, res) {
 }
 
 //
-// 🔥 PROFILE
+//  PROFILE
 //
 async function getProfile(req, res) {
   try {
