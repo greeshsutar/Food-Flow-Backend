@@ -34,7 +34,7 @@ function restaurentRoute(app) {
   app.post("/user/login", login);
   app.post("/user/forgot-password", forgotPassword);
   app.post("/user/reset-password", resetPassword);
- app.post("/user/auth-login",googleLogin);
+ app.post("/user/google-login",googleLogin);
   // PROFILE
   app.get("/user/profile", authMiddleware, getProfile);
 
