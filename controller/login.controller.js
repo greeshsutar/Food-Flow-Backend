@@ -1,11 +1,16 @@
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcrypt");
 const crypto = require("crypto");
+const { OAuth2Client } = require("google-auth-library"); // npm install google-auth-library
 
 const loginModel = require("../model/User.model");
 const transporter = require("../utilis/mail");
 const client = require("../utilis/sms");
 const razorpay = require("../utilis/razorpay");
+
+// Google OAuth client — uses the SAME client ID your frontend uses
+// Add GOOGLE_CLIENT_ID to your backend's .env (Render dashboard too)
+const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 // OTP generator
 function generateotp() {
@@ -225,6 +230,72 @@ async function login(req, res) {
 }
 
 //
+// 🔥 GOOGLE LOGIN
+//
+async function googleLogin(req, res) {
+  try {
+    const { token } = req.body;
+
+    if (!token) {
+      return res.status(400).send({ message: "Google token required" });
+    }
+
+    // Verify the token with Google — throws if invalid/expired/wrong audience
+    const ticket = await googleClient.verifyIdToken({
+      idToken: token,
+      audience: process.env.GOOGLE_CLIENT_ID,
+    });
+
+    const payload = ticket.getPayload();
+    const { email, given_name, family_name, sub: googleId } = payload;
+
+    if (!email) {
+      return res.status(400).send({ message: "Google account has no email" });
+    }
+
+    // Find existing user by email, or create a new one
+    let user = await loginModel.findOne({ gmail: email });
+
+    if (!user) {
+      user = await loginModel.create({
+        firstname: given_name || "Google",
+        lastname: family_name || "User",
+        gmail: email,
+        googleId,
+        isVerified: true, // Google already verified this email
+      });
+    } else if (!user.isVerified) {
+      // Existing account signed up via email/OTP but never verified —
+      // Google sign-in confirms ownership of the email, so mark verified
+      user.isVerified = true;
+      if (!user.googleId) user.googleId = googleId;
+      await user.save();
+    }
+
+    const jwtToken = jwt.sign(
+      { id: user._id, name: user.firstname },
+      process.env.JWT_SECRET,
+      { expiresIn: "1h" }
+    );
+
+    return res.send({
+      message: "Google login successful",
+      token: jwtToken,
+      user: {
+        id: user._id,
+        firstname: user.firstname,
+        lastname: user.lastname,
+        gmail: user.gmail,
+      },
+    });
+
+  } catch (err) {
+    console.error(err);
+    return res.status(401).send({ message: "Google authentication failed" });
+  }
+}
+
+//
 //  FORGOT PASSWORD
 //
 async function forgotPassword(req, res) {
@@ -367,6 +438,7 @@ module.exports = {
   signup,
   signupotp,
   login,
+  googleLogin,
   forgotPassword,
   resetPassword,
   getProfile,
