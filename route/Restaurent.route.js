@@ -6,7 +6,8 @@ const {
   getProfile,
   payment,
   signupotp,
-  verifyPayment
+  verifyPayment,
+  googleLogin
 } = require("../controller/login.controller");
 
 const { getRestaurants, getMenu } = require("../controller/Swiggy.controller.js")
@@ -33,7 +34,7 @@ function restaurentRoute(app) {
   app.post("/user/login", login);
   app.post("/user/forgot-password", forgotPassword);
   app.post("/user/reset-password", resetPassword);
-
+ app.post("/user/auth-login",googleLogin);
   // PROFILE
   app.get("/user/profile", authMiddleware, getProfile);
 
