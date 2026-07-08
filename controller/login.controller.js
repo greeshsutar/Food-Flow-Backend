@@ -289,10 +289,14 @@ async function googleLogin(req, res) {
       },
     });
 
-  } catch (err) {
-    console.error(err);
-    return res.status(401).send({ message: "Google authentication failed" });
-  }
+  }catch(err){
+  console.log("Google Login Error:", err);
+
+  return res.status(500).json({
+    message: err.message,
+    stack: err.stack
+  });
+}
 }
 
 //
