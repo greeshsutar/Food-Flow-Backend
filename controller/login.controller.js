@@ -239,7 +239,8 @@ async function googleLogin(req, res) {
     if (!token) {
       return res.status(400).send({ message: "Google token required" });
     }
-
+    console.log("GOOGLE_CLIENT_ID:", process.env.GOOGLE_CLIENT_ID);
+console.log("JWT_SECRET exists:", !!process.env.JWT_SECRET);
     // Verify the token with Google — throws if invalid/expired/wrong audience
     const ticket = await googleClient.verifyIdToken({
       idToken: token,
