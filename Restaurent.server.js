@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require("express");
 const compression = require("compression");
 const helmet = require("helmet");
@@ -8,7 +9,6 @@ const mongoDbConnect = require("./configure/Restaurent.configure");
 const restaurentRoute = require("./route/Restaurent.route");
 
 // Middleware
-require('dotenv').config();
 app.use(compression()); // Gzip compression for perf
 app.use(helmet()); // Security headers
 app.use(morgan('combined')); // Request logging
