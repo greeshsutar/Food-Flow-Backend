@@ -4,7 +4,9 @@
   "description": "",
   "main": "Restaurent.server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+      "start": "node Restaurent.server.js",
+  "dev": "nodemon Restaurent.server.js"
   },
   "keywords": [],
   "author": "",
