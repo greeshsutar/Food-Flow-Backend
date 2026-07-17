@@ -21,6 +21,39 @@ async function fetchingRestaurent(req, res) {
   }
 }
 
+
+async function googleouth(req,res){
+let {token} =req.body;
+
+if(!token){
+  return res.status(404).json({message:"token does not exist"});
+}
+
+
+
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 async function creatingRestaurent(req, res) {
   console.log("POST HIT", req.body);
 
