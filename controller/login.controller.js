@@ -24,7 +24,7 @@ async function signup(req, res) {
   try {
     const { firstname, lastname, gmail, mobileno, password } = req.body;
 
-    console.log("BODY:", req.body); // 🔍 DEBUG
+    console.log("BODY:", req.body);
 
     if (!firstname || !lastname || !password) {
       return res.status(400).send({ message: "Required fields missing" });
@@ -42,9 +42,13 @@ async function signup(req, res) {
       return res.status(400).send({ message: "Weak password" });
     }
 
-    const existingUser = await loginModel.findOne({
-      $or: [{ gmail }, { mobileno }],
-    });
+    // ✅ FIX: only include the field that's actually provided
+    const orConditions = [];
+    if (gmail) orConditions.push({ gmail });
+    if (mobileno) orConditions.push({ mobileno });
+
+    const existingUser = await loginModel.findOne({ $or: orConditions });
+
 
     // HANDLE EXISTING USER
     if (existingUser) {
