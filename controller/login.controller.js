@@ -181,9 +181,12 @@ async function login(req, res) {
       return res.status(400).send({ message: "Missing credentials" });
     }
 
-    const user = await loginModel.findOne({
-      $or: [{ gmail }, { mobileno }],
-    });
+    // ✅ FIX: same pattern
+    const orConditions = [];
+    if (gmail) orConditions.push({ gmail });
+    if (mobileno) orConditions.push({ mobileno });
+
+    const user = await loginModel.findOne({ $or: orConditions });
 
     if (!user) return res.status(400).send({ message: "User not found" });
 
