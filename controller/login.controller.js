@@ -1,25 +1,19 @@
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcrypt");
 const crypto = require("crypto");
-const { OAuth2Client } = require("google-auth-library"); // npm install google-auth-library
+const { OAuth2Client } = require("google-auth-library");
 
 const loginModel = require("../model/User.model");
 const transporter = require("../utilis/mail");
 const client = require("../utilis/sms");
 const razorpay = require("../utilis/razorpay");
 
-// Google OAuth client — uses the SAME client ID your frontend uses
-// Add GOOGLE_CLIENT_ID to your backend's .env (Render dashboard too)
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
-// OTP generator
 function generateotp() {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
-//
-//  SIGNUP
-//
 async function signup(req, res) {
   try {
     const { firstname, lastname, gmail, mobileno, password } = req.body;
@@ -42,15 +36,12 @@ async function signup(req, res) {
       return res.status(400).send({ message: "Weak password" });
     }
 
-    // ✅ FIX: only include the field that's actually provided
     const orConditions = [];
     if (gmail) orConditions.push({ gmail });
     if (mobileno) orConditions.push({ mobileno });
 
     const existingUser = await loginModel.findOne({ $or: orConditions });
 
-
-    // HANDLE EXISTING USER
     if (existingUser) {
       if (!existingUser.isVerified) {
         const otp = generateotp();
@@ -60,19 +51,19 @@ async function signup(req, res) {
 
         await existingUser.save();
 
-        //  SEND OTP BASED ON DATA (NOT METHOD)
+        console.log(`OTP for ${existingUser.gmail || existingUser.mobileno}: ${otp}`);
         if (existingUser.gmail && existingUser.gmail.trim() !== "") {
-          await transporter.sendMail({
+          transporter.sendMail({
             to: existingUser.gmail,
             subject: "OTP Verification",
             text: `Your OTP is ${otp}`,
-          });
+          }).catch((err) => console.error("OTP email failed:", err.message));
         } else if (existingUser.mobileno && existingUser.mobileno.trim() !== "") {
-          await client.messages.create({
+          client.messages.create({
             body: `Your OTP is ${otp}`,
             from: process.env.TWILIO_PHONE,
             to: "+91" + existingUser.mobileno,
-          });
+          }).catch((err) => console.error("OTP SMS failed:", err.message));
         }
 
         return res.send({
@@ -84,39 +75,39 @@ async function signup(req, res) {
       return res.status(400).send({ message: "User already exists" });
     }
 
-    //  NEW USER
     const otp = generateotp();
 
     await loginModel.create({
       firstname,
       lastname,
-      gmail: gmail || undefined,        // ✅ FIX
-      mobileno: mobileno || undefined,  // ✅ FIX
+      gmail: gmail || undefined,
+      mobileno: mobileno || undefined,
       password: await bcrypt.hash(password, 10),
       otp: await bcrypt.hash(otp, 10),
       otpExpires: Date.now() + 5 * 60 * 1000,
       isVerified: false,
     });
 
-    // ✅ SEND OTP (STRICT CHECK)
+    console.log(`OTP for ${gmail || mobileno}: ${otp}`);
+
     if (gmail && gmail.trim() !== "") {
-      await transporter.sendMail({
+      transporter.sendMail({
         to: gmail,
         subject: "OTP Verification",
         text: `Your OTP is ${otp}`,
-      });
+      }).catch((err) => console.error("OTP email failed:", err.message));
     } else if (mobileno && mobileno.trim() !== "") {
-      await client.messages.create({
+      client.messages.create({
         body: `Your OTP is ${otp}`,
         from: process.env.TWILIO_PHONE,
         to: "+91" + mobileno,
-      });
+      }).catch((err) => console.error("OTP SMS failed:", err.message));
     } else {
       return res.status(400).send({ message: "No valid contact provided" });
     }
 
     return res.send({
-      message: `OTP sent to ${gmail ? "email" : "mobile"}`, // ✅ FIXED MESSAGE
+      message: `OTP sent to ${gmail ? "email" : "mobile"}`,
       requireOtp: true,
     });
 
@@ -126,9 +117,6 @@ async function signup(req, res) {
   }
 }
 
-//
-// 🔥 OTP VERIFY
-//
 async function signupotp(req, res) {
   try {
     const { gmail, mobileno, otp } = req.body;
@@ -169,10 +157,6 @@ async function signupotp(req, res) {
   }
 }
 
-
-//
-//  LOGIN (FIXED FLOW)
-//
 async function login(req, res) {
   try {
     const { gmail, mobileno, password } = req.body;
@@ -181,7 +165,6 @@ async function login(req, res) {
       return res.status(400).send({ message: "Missing credentials" });
     }
 
-    // ✅ FIX: same pattern
     const orConditions = [];
     if (gmail) orConditions.push({ gmail });
     if (mobileno) orConditions.push({ mobileno });
@@ -193,7 +176,6 @@ async function login(req, res) {
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) return res.status(400).send({ message: "Invalid password" });
 
-    // 🔥 NOT VERIFIED → SEND OTP
     if (!user.isVerified) {
       const otp = generateotp();
 
@@ -202,18 +184,19 @@ async function login(req, res) {
 
       await user.save();
 
+      console.log(`OTP for ${user.gmail || user.mobileno}: ${otp}`);
       if (user.gmail && user.gmail.trim() !== "") {
-        await transporter.sendMail({
+        transporter.sendMail({
           to: user.gmail,
           subject: "OTP Verification",
           text: `Your OTP is ${otp}`,
-        });
+        }).catch((err) => console.error("OTP email failed:", err.message));
       } else if (user.mobileno && user.mobileno.trim() !== "") {
-        await client.messages.create({
+        client.messages.create({
           body: `Your OTP is ${otp}`,
           from: process.env.TWILIO_PHONE,
           to: "+91" + user.mobileno,
-        });
+        }).catch((err) => console.error("OTP SMS failed:", err.message));
       }
 
       return res.status(403).send({
@@ -236,9 +219,6 @@ async function login(req, res) {
   }
 }
 
-//
-// 🔥 GOOGLE LOGIN
-//
 async function googleLogin(req, res) {
   try {
     const { token } = req.body;
@@ -246,9 +226,7 @@ async function googleLogin(req, res) {
     if (!token) {
       return res.status(400).send({ message: "Google token required" });
     }
-    console.log("GOOGLE_CLIENT_ID:", process.env.GOOGLE_CLIENT_ID);
-console.log("JWT_SECRET exists:", !!process.env.JWT_SECRET);
-    // Verify the token with Google — throws if invalid/expired/wrong audience
+
     const ticket = await googleClient.verifyIdToken({
       idToken: token,
       audience: process.env.GOOGLE_CLIENT_ID,
@@ -261,7 +239,6 @@ console.log("JWT_SECRET exists:", !!process.env.JWT_SECRET);
       return res.status(400).send({ message: "Google account has no email" });
     }
 
-    // Find existing user by email, or create a new one
     let user = await loginModel.findOne({ gmail: email });
 
     if (!user) {
@@ -270,11 +247,9 @@ console.log("JWT_SECRET exists:", !!process.env.JWT_SECRET);
         lastname: family_name || "User",
         gmail: email,
         googleId,
-        isVerified: true, // Google already verified this email
+        isVerified: true,
       });
     } else if (!user.isVerified) {
-      // Existing account signed up via email/OTP but never verified —
-      // Google sign-in confirms ownership of the email, so mark verified
       user.isVerified = true;
       if (!user.googleId) user.googleId = googleId;
       await user.save();
@@ -297,19 +272,14 @@ console.log("JWT_SECRET exists:", !!process.env.JWT_SECRET);
       },
     });
 
-  }catch(err){
-  console.log("Google Login Error:", err);
-
-  return res.status(500).json({
-    message: err.message,
-    stack: err.stack
-  });
-}
+  } catch (err) {
+    return res.status(500).json({
+      message: err.message,
+      stack: err.stack
+    });
+  }
 }
 
-//
-//  FORGOT PASSWORD
-//
 async function forgotPassword(req, res) {
   try {
     const { gmail, mobileno } = req.body;
@@ -328,18 +298,19 @@ async function forgotPassword(req, res) {
 
     await user.save();
 
+    console.log(`Reset OTP for ${gmail || mobileno}: ${otp}`);
     if (gmail) {
-      await transporter.sendMail({
+      transporter.sendMail({
         to: gmail,
         subject: "Reset OTP",
         text: `Your OTP is ${otp}`,
-      });
+      }).catch((err) => console.error("Reset OTP email failed:", err.message));
     } else {
-      await client.messages.create({
+      client.messages.create({
         body: `Your OTP is ${otp}`,
         from: process.env.TWILIO_PHONE,
         to: "+91" + mobileno,
-      });
+      }).catch((err) => console.error("Reset OTP SMS failed:", err.message));
     }
 
     return res.send({ message: "OTP sent" });
@@ -349,9 +320,6 @@ async function forgotPassword(req, res) {
   }
 }
 
-//
-// 🔥 RESET PASSWORD
-//
 async function resetPassword(req, res) {
   try {
     const { gmail, mobileno, otp, newPassword } = req.body;
@@ -379,9 +347,6 @@ async function resetPassword(req, res) {
   }
 }
 
-//
-// 🔥 PAYMENT
-//
 async function payment(req, res) {
   try {
     const { totalamount, paymentMethod } = req.body;
@@ -402,9 +367,6 @@ async function payment(req, res) {
   }
 }
 
-//
-//  PROFILE
-//
 async function getProfile(req, res) {
   try {
     const user = await loginModel
@@ -417,6 +379,7 @@ async function getProfile(req, res) {
     return res.status(500).send({ message: "Profile error" });
   }
 }
+
 async function verifyPayment(req, res) {
   try {
     const {
@@ -443,9 +406,7 @@ async function verifyPayment(req, res) {
     return res.status(500).send({ message: "Verification error" });
   }
 }
-//
-// EXPORT
-//
+
 module.exports = {
   signup,
   signupotp,
