@@ -3,10 +3,16 @@ const express = require("express");
 const compression = require("compression");
 const helmet = require("helmet");
 const morgan = require("morgan");
+const transporter = require("./utilis/mail");
 const app = express();
 
 const mongoDbConnect = require("./configure/Restaurent.configure");
 const restaurentRoute = require("./route/Restaurent.route");
+
+transporter.verify((err) => {
+  if (err) console.error("SMTP connection failed:", err.message);
+  else console.log("SMTP server ready");
+});
 
 // Middleware
 app.use(compression()); // Gzip compression for perf
