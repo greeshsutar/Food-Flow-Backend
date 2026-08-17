@@ -318,11 +318,17 @@ async function forgotPassword(req, res) {
 
     console.log(`Reset OTP for ${gmail || mobileno}: ${otp}`);
     if (gmail) {
-      transporter.sendMail({
-        to: gmail,
-        subject: "Reset OTP",
-        text: `Your OTP is ${otp}`,
-      }).catch((err) => console.error("Reset OTP email failed:", err.message));
+      try {
+        const info = await transporter.sendMail({
+          to: gmail,
+          subject: "Reset OTP",
+          text: `Your OTP is ${otp}`,
+        });
+        console.log("Reset OTP email sent:", info.messageId);
+      } catch (err) {
+        console.error("Reset OTP email failed:", err.message);
+        return res.status(500).send({ message: "Failed to send reset OTP email" });
+      }
     } else {
       client.messages.create({
         body: `Your OTP is ${otp}`,
