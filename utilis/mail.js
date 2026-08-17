@@ -1,6 +1,7 @@
-const { Resend } = require("resend");
+let nodemailer = require("nodemailer");
 require("dotenv").config();
 
+<<<<<<< HEAD
 if (!process.env.RESEND_API_KEY) {
   console.error("RESEND_API_KEY not set in environment");
 }
@@ -46,5 +47,18 @@ const transporter = {
     }
   }
 };
+=======
+
+let transporter = nodemailer.createTransport({
+    host: "smtp.gmail.com",
+    port: 465,
+    secure: true,
+    family: 4, 
+    auth:{
+        user:process.env.Email_USER,
+        pass:process.env.Email_PASS
+    }
+})
+>>>>>>> parent of 135bd0d (Aug 17, 2026, 4:33 PM)
 
 module.exports = transporter;
