@@ -97,11 +97,17 @@ async function signup(req, res) {
     console.log(`OTP for ${gmail || mobileno}: ${otp}`);
 
     if (gmail && gmail.trim() !== "") {
-      transporter.sendMail({
-        to: gmail,
-        subject: "OTP Verification",
-        text: `Your OTP is ${otp}`,
-      }).catch((err) => console.error("OTP email failed:", err.message));
+      try {
+        const info = await transporter.sendMail({
+          to: gmail,
+          subject: "OTP Verification",
+          text: `Your OTP is ${otp}`,
+        });
+        console.log("OTP email sent:", info.messageId);
+      } catch (err) {
+        console.error("OTP email failed:", err.message);
+        return res.status(500).send({ message: "Failed to send OTP email" });
+      }
     } else if (mobileno && mobileno.trim() !== "") {
       client.messages.create({
         body: `Your OTP is ${otp}`,
