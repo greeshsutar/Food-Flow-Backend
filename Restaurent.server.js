@@ -19,7 +19,11 @@ app.use(compression()); // Gzip compression for perf
 app.use(helmet()); // Security headers
 app.use(morgan('combined')); // Request logging
 app.use(express.json());
-app.use(require('cors')());
+const cors = require('cors');
+app.use(cors({
+  origin: 'https://food-flow-coral.vercel.app',
+  credentials: true
+}));
 
 // Routes
 restaurentRoute(app);
