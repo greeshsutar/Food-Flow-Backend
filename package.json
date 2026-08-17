@@ -5,8 +5,8 @@
   "main": "Restaurent.server.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-      "start": "node Restaurent.server.js",
-      "dev": "nodemon Restaurent.server.js"
+    "start": "node Restaurent.server.js",
+    "dev": "nodemon Restaurent.server.js"
   },
   "keywords": [],
   "author": "",
@@ -27,6 +27,7 @@
     "nodemailer": "^8.0.5",
     "nodemon": "^3.1.14",
     "razorpay": "^2.9.6",
+    "resend": "^6.20.0",
     "twilio": "^5.13.1"
   }
 }
