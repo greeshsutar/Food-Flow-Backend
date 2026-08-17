@@ -53,11 +53,17 @@ async function signup(req, res) {
 
         console.log(`OTP for ${existingUser.gmail || existingUser.mobileno}: ${otp}`);
         if (existingUser.gmail && existingUser.gmail.trim() !== "") {
-          transporter.sendMail({
-            to: existingUser.gmail,
-            subject: "OTP Verification",
-            text: `Your OTP is ${otp}`,
-          }).catch((err) => console.error("OTP email failed:", err.message));
+          try {
+            const info = await transporter.sendMail({
+              to: existingUser.gmail,
+              subject: "OTP Verification",
+              text: `Your OTP is ${otp}`,
+            });
+            console.log("OTP email sent:", info.messageId);
+          } catch (err) {
+            console.error("OTP email failed:", err.message);
+            return res.status(500).send({ message: "Failed to send OTP email" });
+          }
         } else if (existingUser.mobileno && existingUser.mobileno.trim() !== "") {
           client.messages.create({
             body: `Your OTP is ${otp}`,
