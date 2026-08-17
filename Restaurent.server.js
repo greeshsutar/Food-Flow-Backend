@@ -9,7 +9,10 @@ const app = express();
 const mongoDbConnect = require("./configure/Restaurent.configure");
 const restaurentRoute = require("./route/Restaurent.route");
 
-console.log("Email service (Resend) ready");
+transporter.verify((err) => {
+  if (err) console.error("SMTP connection failed:", err.message);
+  else console.log("SMTP server ready");
+});
 
 // Middleware
 app.use(compression()); // Gzip compression for perf
