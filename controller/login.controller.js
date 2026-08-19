@@ -18,7 +18,6 @@ async function signup(req, res) {
   try {
     const { firstname, lastname, gmail, mobileno, password } = req.body;
 
-    console.log("BODY:", req.body);
 
     if (!firstname || !lastname || !password) {
       return res.status(400).send({ message: "Required fields missing" });
@@ -53,17 +52,11 @@ async function signup(req, res) {
 
         console.log(`OTP for ${existingUser.gmail || existingUser.mobileno}: ${otp}`);
         if (existingUser.gmail && existingUser.gmail.trim() !== "") {
-          try {
-            const info = await transporter.sendMail({
-              to: existingUser.gmail,
-              subject: "OTP Verification",
-              text: `Your OTP is ${otp}`,
-            });
-            console.log("OTP email sent:", info.messageId);
-          } catch (err) {
-            console.error("OTP email failed:", err.message);
-            return res.status(500).send({ message: "Failed to send OTP email" });
-          }
+          transporter.sendMail({
+            to: existingUser.gmail,
+            subject: "OTP Verification",
+            text: `Your OTP is ${otp}`,
+          }).catch((err) => console.error("OTP email failed:", err.message));
         } else if (existingUser.mobileno && existingUser.mobileno.trim() !== "") {
           client.messages.create({
             body: `Your OTP is ${otp}`,
@@ -97,17 +90,11 @@ async function signup(req, res) {
     console.log(`OTP for ${gmail || mobileno}: ${otp}`);
 
     if (gmail && gmail.trim() !== "") {
-      try {
-        const info = await transporter.sendMail({
-          to: gmail,
-          subject: "OTP Verification",
-          text: `Your OTP is ${otp}`,
-        });
-        console.log("OTP email sent:", info.messageId);
-      } catch (err) {
-        console.error("OTP email failed:", err.message);
-        return res.status(500).send({ message: "Failed to send OTP email" });
-      }
+      transporter.sendMail({
+        to: gmail,
+        subject: "OTP Verification",
+        text: `Your OTP is ${otp}`,
+      }).catch((err) => console.error("OTP email failed:", err.message));
     } else if (mobileno && mobileno.trim() !== "") {
       client.messages.create({
         body: `Your OTP is ${otp}`,
@@ -198,17 +185,11 @@ async function login(req, res) {
 
       console.log(`OTP for ${user.gmail || user.mobileno}: ${otp}`);
       if (user.gmail && user.gmail.trim() !== "") {
-        try {
-          const info = await transporter.sendMail({
-            to: user.gmail,
-            subject: "OTP Verification",
-            text: `Your OTP is ${otp}`,
-          });
-          console.log("OTP email sent:", info.messageId);
-        } catch (err) {
-          console.error("OTP email failed:", err.message);
-          return res.status(500).send({ message: "Failed to send OTP email" });
-        }
+        transporter.sendMail({
+          to: user.gmail,
+          subject: "OTP Verification",
+          text: `Your OTP is ${otp}`,
+        }).catch((err) => console.error("OTP email failed:", err.message));
       } else if (user.mobileno && user.mobileno.trim() !== "") {
         client.messages.create({
           body: `Your OTP is ${otp}`,
@@ -318,17 +299,11 @@ async function forgotPassword(req, res) {
 
     console.log(`Reset OTP for ${gmail || mobileno}: ${otp}`);
     if (gmail) {
-      try {
-        const info = await transporter.sendMail({
-          to: gmail,
-          subject: "Reset OTP",
-          text: `Your OTP is ${otp}`,
-        });
-        console.log("Reset OTP email sent:", info.messageId);
-      } catch (err) {
-        console.error("Reset OTP email failed:", err.message);
-        return res.status(500).send({ message: "Failed to send reset OTP email" });
-      }
+      transporter.sendMail({
+        to: gmail,
+        subject: "Reset OTP",
+        text: `Your OTP is ${otp}`,
+      }).catch((err) => console.error("Reset OTP email failed:", err.message));
     } else {
       client.messages.create({
         body: `Your OTP is ${otp}`,
